@@ -1,0 +1,10 @@
+Mapa de Escudos de Burgos v4
+- Fondo sin etiquetas: no muestra nombres de carreteras, tiendas ni negocios.
+- Los nombres de municipios se superponen como etiquetas propias.
+- Zoom hasta 22 y límites alrededor de la provincia.
+- Escudos como imágenes normales.
+- Tamaño de escudos ajustable con barra −/+.
+- Escudos y posición se guardan en el navegador (IndexedDB).
+- Los escudos se pueden arrastrar para separarlos si se solapan.
+- Requiere Internet para cargar el mapa y los datos de municipios.
+- Para usarlo como app, abre index.html en Chrome o súbelo a un alojamiento web.
