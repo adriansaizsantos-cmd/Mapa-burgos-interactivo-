@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Mapa de Escudos de Burgos — V3</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+html,body,#map{height:100%;margin:0}body{font-family:system-ui,sans-serif;overflow:hidden}
+#map{background:#f3f0e8}.panel{position:absolute;z-index:1000;top:10px;left:10px;right:10px;
+background:#fffffff5;border-radius:14px;padding:9px;box-shadow:0 3px 18px #0003}
+.row{display:flex;gap:7px;margin-bottom:7px}.row:last-child{margin:0}
+input{flex:1;min-width:0;padding:10px;border:1px solid #ccc;border-radius:9px;font-size:15px}
+button,label{border:0;border-radius:9px;padding:10px 12px;background:#222;color:#fff;font-size:14px}
+label{display:inline-block}.secondary{background:#e9e9e9;color:#222}.status{font-size:12px;color:#555}
+.shield{background:transparent;border:0}.shield img{width:var(--s);height:var(--s);object-fit:contain;display:block;filter:drop-shadow(0 1px 2px #0006)}
+.tip{position:absolute;z-index:1001;bottom:15px;left:50%;transform:translateX(-50%);background:#000b;color:#fff;
+padding:8px 12px;border-radius:10px;font-size:12px;pointer-events:none;text-align:center;white-space:nowrap}
+</style></head><body><div id="map"></div>
+<div class="panel">
+<div class="row"><input id="q" placeholder="Busca un municipio de Burgos…"><button id="go">Buscar</button></div>
+<div class="row"><label for="file">🛡️ Añadir escudo</label><input id="file" type="file" accept="image/*" hidden>
+<button id="cancel" class="secondary">Cancelar</button><button id="clear" class="secondary">Borrar todo</button></div>
+<div id="status" class="status">Mapa limpio: sin tiendas ni carreteras. Añade una foto y toca el municipio.</div>
+</div><div class="tip">BURGOS · zoom muy alto · pellizca para acercar</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const B=L.latLngBounds([41.80,-4.60],[43.35,-2.70]);
+const map=L.map('map',{minZoom:9,maxZoom:22,maxBounds:B,maxBoundsViscosity:1,zoomControl:true}).fitBounds(B);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',{
+subdomains:'abcd',maxZoom:20,attribution:'© OpenStreetMap contributors © CARTO'}).addTo(map);
+
+const markers=[];let pending=null;
+const status=document.getElementById('status');
+function msg(x){status.textContent=x}
+function ico(src){let z=map.getZoom(),s=Math.max(18,Math.min(115,22*Math.pow(1.17,z-10)));
+return L.divIcon({className:'shield',html:`<img src="${src}" style="--s:${s}px">`,iconSize:[s,s],iconAnchor:[s/2,s/2]})}
+map.on('zoomend',()=>markers.forEach(m=>m.setIcon(ico(m.src))));
+file.onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{pending=r.result;msg('Foto lista. Ahora toca el lugar del municipio.');};r.readAsDataURL(f)};
+cancel.onclick=()=>{pending=null;file.value='';msg('Listo.')};
+map.on('click',e=>{if(!pending)return;let n=prompt('Nombre del municipio:')||'Escudo';
+let m=L.marker(e.latlng,{icon:ico(pending)}).addTo(map);m.src=pending;m.name=n;
+m.bindPopup('<b>'+safe(n)+'</b><br><img src="'+pending+'" style="max-width:190px;max-height:190px;object-fit:contain"><br><button onclick="del('+markers.length+')">Eliminar</button>');
+markers.push(m);pending=null;file.value='';msg('Escudo colocado y guardado.');save()});
+function safe(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function del(i){if(!markers[i])return;map.removeLayer(markers[i]);markers.splice(i,1);save()}
+const DB='burgos-v3';
+function db(cb){let r=indexedDB.open(DB,1);r.onupgradeneeded=()=>r.result.createObjectStore('m',{keyPath:'id',autoIncrement:true});r.onsuccess=()=>cb(r.result)}
+function save(){db(d=>{let s=d.transaction('m','readwrite').objectStore('m');s.clear();markers.forEach(m=>s.add({lat:m.getLatLng().lat,lng:m.getLatLng().lng,src:m.src,name:m.name}))})}
+function load(){db(d=>d.transaction('m','readonly').objectStore('m').getAll().onsuccess=e=>(e.target.result||[]).forEach(x=>{
+let m=L.marker([x.lat,x.lng],{icon:ico(x.src)}).addTo(map);m.src=x.src;m.name=x.name;
+m.bindPopup('<b>'+safe(x.name)+'</b><br><img src="'+x.src+'" style="max-width:190px;max-height:190px;object-fit:contain">');markers.push(m)}))}
+clear.onclick=()=>{if(!confirm('¿Borrar todos los escudos guardados?'))return;markers.forEach(m=>map.removeLayer(m));markers.length=0;db(d=>d.transaction('m','readwrite').objectStore('m').clear());msg('Todos borrados.')};
+go.onclick=search; q.onkeydown=e=>{if(e.key==='Enter')search()};
+async function search(){let x=q.value.trim();if(!x)return;msg('Buscando…');try{
+let u='https://nominatim.openstreetmap.org/search?format=json&limit=10&countrycodes=es&q='+encodeURIComponent(x+', Burgos, España');
+let d=await fetch(u,{headers:{'Accept-Language':'es'} }).then(r=>r.json());let p=d.find(a=>+a.lat>41.8&&+a.lat<43.35&&+a.lon>-4.6&&+a.lon<-2.7);
+if(!p){msg('No encontrado.');return}map.setView([+p.lat,+p.lon],15);msg('Encontrado. Puedes colocar el escudo aquí.')}catch(e){msg('No se pudo buscar; comprueba Internet.')}}
+load();
+</script></body></html>
